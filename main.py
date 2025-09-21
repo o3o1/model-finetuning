@@ -7,8 +7,9 @@ import os
 import random
 import re
 import sys
+from collections import Counter
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -91,6 +92,74 @@ TOPICS = {
     "grid_motor": ["inverter", "rectifier", "motor-drive", "SPWM", "SVPWM"],
 }
 
+TOPIC_LABELS = {
+    "converters": "电力变换器拓扑",
+    "control": "控制策略",
+    "devices": "功率器件",
+    "magnetics": "磁性元件设计",
+    "thermal": "热设计与可靠性",
+    "emi_emc": "EMI/EMC 控制",
+    "grid_motor": "电网与电机应用",
+}
+
+SUBTOPIC_LABELS = {
+    "converters": {
+        "buck": "Buck 降压变换器",
+        "boost": "Boost 升压变换器",
+        "buck-boost": "Buck-Boost 升降压变换器",
+        "flyback": "反激式变换器",
+        "forward": "正激式变换器",
+        "half-bridge": "半桥拓扑",
+        "full-bridge": "全桥拓扑",
+        "LLC": "LLC 谐振变换器",
+        "PFC": "功率因数校正（PFC）",
+    },
+    "control": {
+        "voltage-mode": "电压模式控制",
+        "current-mode": "电流模式控制",
+        "PID": "PID 调节器",
+        "digital-control": "数字控制策略",
+        "compensation": "补偿网络设计",
+        "soft-start": "软启动方案",
+    },
+    "devices": {
+        "MOSFET": "MOSFET 功率晶体管",
+        "IGBT": "IGBT 功率器件",
+        "SiC": "碳化硅器件 (SiC)",
+        "GaN": "氮化镓器件 (GaN)",
+        "diode": "功率二极管",
+        "gate-driver": "栅极驱动器",
+    },
+    "magnetics": {
+        "inductor": "电感器设计",
+        "transformer": "变压器设计",
+        "core": "磁芯选型",
+        "winding": "绕组布局",
+        "saturation": "磁饱和分析",
+    },
+    "thermal": {
+        "heat-sink": "散热器设计",
+        "losses": "损耗评估",
+        "SOA": "安全工作区 (SOA)",
+        "Rth": "热阻 (Rth) 评估",
+        "lifetime": "寿命预测",
+    },
+    "emi_emc": {
+        "layout": "布局布线 (Layout)",
+        "filter": "滤波器设计",
+        "common-mode": "共模干扰",
+        "differential-mode": "差模干扰",
+        "standards": "EMC 标准符合性",
+    },
+    "grid_motor": {
+        "inverter": "逆变器系统",
+        "rectifier": "整流器",
+        "motor-drive": "电机驱动",
+        "SPWM": "正弦 PWM (SPWM)",
+        "SVPWM": "空间矢量 PWM (SVPWM)",
+    },
+}
+
 
 TASK_TYPES = [
     "definition",  # 概念与定义
@@ -164,19 +233,35 @@ def random_value(symbol: str) -> str:
     return "?"
 
 
+def topic_label(topic: str) -> str:
+    return TOPIC_LABELS.get(topic, topic)
+
+
+def subtopic_label(topic: str, sub: str) -> str:
+    return SUBTOPIC_LABELS.get(topic, {}).get(sub, sub)
+
+
 def gen_prompt_zh(topic: str, sub: str, task_type: str) -> str:
     tpl = random.choice(TEMPLATES_ZH[task_type])
     # Fill placeholders if present
+    readable_topic = topic_label(topic)
+    readable_sub = subtopic_label(topic, sub)
+    other_subtopics = [s for s in TOPICS.get(topic, []) if s != sub]
+    if other_subtopics:
+        sub_b = random.choice(other_subtopics)
+    else:
+        sub_b = sub
+    readable_sub_b = subtopic_label(topic, sub_b)
     filled = tpl.format(
-        topic=topic,
-        sub=sub,
+        topic=readable_topic,
+        sub=readable_sub,
         Vin=random_value("Vin"),
         Vout=random_value("Vout"),
         Iout=random_value("Iout"),
         fsw=random_value("fsw"),
         symptom=random_value("symptom"),
-        subA=sub,
-        subB=random.choice([s for s in TOPICS.get(topic, [sub]) if s != sub]) if TOPICS.get(topic) else sub,
+        subA=readable_sub,
+        subB=readable_sub_b,
     )
     return filled
 
@@ -194,15 +279,24 @@ def difficulty_from_task(task_type: str) -> str:
 
 def make_seed_items(num: int, language: str = "zh") -> List[SeedItem]:
     random.seed(42)
-    items: List[SeedItem] = []
     topic_keys = list(TOPICS.keys())
-    created_at = datetime.utcnow().isoformat()
+    created_at = datetime.now(UTC).isoformat()
+    items: List[SeedItem] = []
+    seen_ids = set()
+    max_attempts = num * 50 if num > 0 else 0
+    attempts = 0
     while len(items) < num:
+        if max_attempts and attempts >= max_attempts:
+            raise RuntimeError(f"Unable to generate {num} unique prompts; produced {len(items)}")
+        attempts += 1
         topic = random.choice(topic_keys)
         sub = random.choice(TOPICS[topic])
         task = random.choice(TASK_TYPES)
         prompt = gen_prompt_zh(topic, sub, task)
         item_id = sha1(f"{prompt}")
+        if item_id in seen_ids:
+            continue
+        seen_ids.add(item_id)
         items.append(
             SeedItem(
                 id=item_id,
@@ -216,15 +310,7 @@ def make_seed_items(num: int, language: str = "zh") -> List[SeedItem]:
                 created_at=created_at,
             )
         )
-    # Deduplicate by id
-    seen = set()
-    unique_items: List[SeedItem] = []
-    for it in items:
-        if it.id in seen:
-            continue
-        seen.add(it.id)
-        unique_items.append(it)
-    return unique_items
+    return items
 
 
 # -----------------------------
@@ -265,15 +351,29 @@ def is_chinese_text(s: str) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff]", s))
 
 
-def has_repeated_ngrams(s: str, n: int = 3, threshold: int = 4) -> bool:
-    toks = s.split()
-    counts: Dict[str, int] = {}
-    for i in range(len(toks) - n + 1):
-        ngram = " ".join(toks[i : i + n])
-        counts[ngram] = counts.get(ngram, 0) + 1
-        if counts[ngram] >= threshold:
-            return True
-    return False
+def has_excessive_repetition(
+    s: str,
+    *,
+    min_sentence_len: int = 12,
+    repeat_threshold: int = 2,
+    repetition_ratio: float = 0.45,
+) -> bool:
+    normalized = re.sub(r"[\s\u3000]+", " ", s).strip()
+    if len(normalized) < min_sentence_len * repeat_threshold:
+        return False
+    parts = re.split(r"[。！？!?；;\n]+", normalized)
+    sentences = [part.strip() for part in parts if len(part.strip()) >= min_sentence_len]
+    if not sentences:
+        return False
+    counts = Counter(sentences)
+    total_len = sum(len(sent) for sent in sentences)
+    repeated_len = 0
+    for sent, count in counts.items():
+        if count >= repeat_threshold:
+            repeated_len += len(sent) * (count - 1)
+    if total_len == 0:
+        return False
+    return repeated_len / total_len >= repetition_ratio
 
 
 def quality_filter(in_path: Path, out_path: Path, min_resp_len: int = 40, max_resp_len: int = 4000) -> None:
@@ -291,7 +391,7 @@ def quality_filter(in_path: Path, out_path: Path, min_resp_len: int = 40, max_re
         if not is_chinese_text(prompt):
             continue
         # Low-quality repetition
-        if has_repeated_ngrams(resp):
+        if has_excessive_repetition(resp):
             continue
         # Simple duplication by content hash
         h = sha1(prompt + "\n" + resp)
