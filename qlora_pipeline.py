@@ -23,7 +23,7 @@ from trl import SFTConfig, SFTTrainer
 
 
 try:
-    import evaluate
+    import evaluate as hf_evaluate
     import sacrebleu
 except ImportError as exc:  # pragma: no cover - guidance for missing deps
     raise SystemExit(
@@ -99,11 +99,13 @@ def get_quantization_config(use_4bit: bool, bnb_nf4: bool = True) -> Optional[Bi
     )
 
 
-def prepare_tokenizer(model_name: str, trust_remote_code: bool) -> AutoTokenizer:
+def prepare_tokenizer(model_name: str, trust_remote_code: bool, *, force_left_padding: bool = False) -> AutoTokenizer:
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote_code)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    if tokenizer.padding_side != "right":
+    if force_left_padding:
+        tokenizer.padding_side = "left"
+    else:
         tokenizer.padding_side = "right"
     return tokenizer
 
@@ -114,7 +116,11 @@ def train(args: argparse.Namespace) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     datasets_dict = load_sft_datasets(data_dir)
-    tokenizer = prepare_tokenizer(args.model_name, args.trust_remote_code)
+    tokenizer = prepare_tokenizer(
+        args.model_name,
+        args.trust_remote_code,
+        force_left_padding=args.left_padding,
+    )
     prompter = Prompter(system_prompt=args.system_prompt or DEFAULT_SYSTEM, template=args.prompt_template)
 
     train_dataset = prepare_supervised_dataset(datasets_dict["train"], tokenizer, prompter)
@@ -164,6 +170,9 @@ def train(args: argparse.Namespace) -> None:
         "max_length": args.max_seq_length,
         "dataset_text_field": "text",
     }
+
+    if args.gradient_checkpointing:
+        sft_kwargs["gradient_checkpointing_kwargs"] = {"use_reentrant": args.gc_use_reentrant}
 
     if args.save_strategy == "steps":
         sft_kwargs["save_steps"] = args.save_steps
@@ -232,6 +241,7 @@ def generate_predictions(
     max_new_tokens: int,
     temperature: float,
     top_p: float,
+    top_k: Optional[int],
     do_sample: bool,
     batch_size: int,
     device: torch.device,
@@ -240,7 +250,18 @@ def generate_predictions(
     results: List[Dict[str, str]] = []
     model.eval()
     for start in range(0, len(dataset), batch_size):
-        batch = dataset[start : start + batch_size]
+        raw_batch = dataset[start : start + batch_size]
+        if isinstance(raw_batch, dict):
+            batch_size_eff = len(next(iter(raw_batch.values()))) if raw_batch else 0
+            batch = [
+                {key: raw_batch[key][i] for key in raw_batch}
+                for i in range(batch_size_eff)
+            ]
+        else:
+            batch = list(raw_batch)
+        if not batch:
+            continue
+
         prompts = [prompter.build_input(item["prompt"]) for item in batch]
         inputs = tokenizer(
             prompts,
@@ -257,6 +278,7 @@ def generate_predictions(
                 do_sample=do_sample,
                 temperature=temperature,
                 top_p=top_p,
+                top_k=top_k,
                 eos_token_id=tokenizer.eos_token_id,
                 pad_token_id=tokenizer.pad_token_id,
             )
@@ -288,6 +310,9 @@ def evaluate(args: argparse.Namespace) -> None:
     tokenizer = AutoTokenizer.from_pretrained(adapter_dir if adapter_dir.exists() else args.model_name, trust_remote_code=args.trust_remote_code)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left" if not args.right_padding else "right"
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
     quant_config = get_quantization_config(use_4bit=not args.no_quant)
     base_model = AutoModelForCausalLM.from_pretrained(
@@ -313,6 +338,7 @@ def evaluate(args: argparse.Namespace) -> None:
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         top_p=args.top_p,
+        top_k=args.top_k,
         do_sample=args.do_sample,
         batch_size=args.batch_size,
         device=device,
@@ -322,7 +348,7 @@ def evaluate(args: argparse.Namespace) -> None:
     predictions = [item["prediction"] for item in generations]
     references = [item["reference"] for item in generations]
 
-    rouge = evaluate.load("rouge")
+    rouge = hf_evaluate.load("rouge")
     rouge_scores = rouge.compute(predictions=predictions, references=references, use_stemmer=True)
     bleu = sacrebleu.corpus_bleu(predictions, [references])
 
@@ -359,6 +385,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_p.add_argument("--prompt-template", default=DEFAULT_TEMPLATE, help="Prompt template (must contain {system} and {prompt})")
     train_p.add_argument("--trust-remote-code", action="store_true", help="Enable trust_remote_code for custom models")
     train_p.add_argument("--no-quant", action="store_true", help="Disable 4-bit quantized loading")
+    train_p.add_argument("--left-padding", action="store_true", help="Use left padding during training inputs")
     train_p.add_argument("--per-device-train-batch-size", type=int, default=2)
     train_p.add_argument("--per-device-eval-batch-size", type=int, default=2)
     train_p.add_argument("--gradient-accumulation-steps", type=int, default=8)
@@ -390,6 +417,11 @@ def build_parser() -> argparse.ArgumentParser:
     train_p.add_argument("--lora-dropout", type=float, default=0.1)
     train_p.add_argument("--lora-target-modules", nargs="+", help="Restrict LoRA to specific target modules")
     train_p.add_argument("--gradient-checkpointing", action="store_true")
+    train_p.add_argument(
+        "--gc-use-reentrant",
+        action="store_true",
+        help="Use reentrant checkpointing (default False for Torch>=2.5 recommendation)",
+    )
     train_p.add_argument("--bf16", action="store_true")
     train_p.add_argument("--fp16", action="store_true")
     train_p.add_argument("--report-to", nargs="+", help="Optional trackers e.g. wandb")
@@ -404,9 +436,11 @@ def build_parser() -> argparse.ArgumentParser:
     eval_p.add_argument("--prompt-template", default=DEFAULT_TEMPLATE, help="Prompt template used during training")
     eval_p.add_argument("--trust-remote-code", action="store_true")
     eval_p.add_argument("--no-quant", action="store_true")
+    eval_p.add_argument("--right-padding", action="store_true", help="Use right padding during generation (default left)")
     eval_p.add_argument("--max-new-tokens", type=int, default=512)
     eval_p.add_argument("--temperature", type=float, default=0.0)
     eval_p.add_argument("--top-p", type=float, default=0.9)
+    eval_p.add_argument("--top-k", type=int)
     eval_p.add_argument("--do-sample", action="store_true")
     eval_p.add_argument("--batch-size", type=int, default=2)
     eval_p.add_argument("--input-max-length", type=int, default=1024)
