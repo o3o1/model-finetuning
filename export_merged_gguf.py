@@ -61,19 +61,31 @@ def export_to_gguf(
     ]
     run(cmd)
 
-    candidates = list(gguf_stem.parent.glob(f"{gguf_stem.name}*-{outtype}.gguf"))
-    if gguf_out.exists():
-        f16_path = gguf_out
-    elif gguf_out.suffix == ".gguf" and (gguf_stem.parent / gguf_out.name).exists():
-        f16_path = gguf_stem.parent / gguf_out.name
+    explicit_target = gguf_out if gguf_out.suffix == ".gguf" else None
+    candidates = sorted(
+        gguf_stem.parent.glob("*.gguf"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+    # convert.py default: <outfile> when suffix missing, or <outfile>-<outtype>.gguf
+    if explicit_target and explicit_target.exists():
+        f16_path = explicit_target
+    elif (gguf_stem.parent / gguf_stem.name).is_file():
+        src = gguf_stem.parent / gguf_stem.name
+        if explicit_target:
+            src = src.rename(explicit_target)
+            f16_path = explicit_target
+        else:
+            f16_path = src
     elif candidates:
         f16_path = candidates[0]
+        if explicit_target and not explicit_target.exists():
+            f16_path = f16_path.rename(explicit_target)
+        elif explicit_target and explicit_target.exists():
+            f16_path = explicit_target
     else:
-        # fallback to any *.gguf under stem
-        candidates = list(gguf_stem.parent.glob(f"{gguf_stem.name}*.gguf"))
-        if not candidates:
-            raise FileNotFoundError("Failed to locate generated GGUF file")
-        f16_path = candidates[0]
+        raise FileNotFoundError("Failed to locate generated GGUF file")
 
     if quant:
         quant_bin_candidates = [

@@ -1,0 +1,110 @@
+[
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n需要一个Boost电路连续电流模式（CCM）的建模分析。\n\n可用专家列表：\n1. B70「工作模式分析师」：研究CCM模式下的建模。\n2. B71「Boost建模顾问」：专门研究Boost电路。\n3. B72「仿真性能导师」：验证CCM模型。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，进行Boost电路CCM建模分析\", \"agent_name\": \"工作模式分析师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请总结一下三相电机驱动系统中的常见PWM调制方法。\n\n可用专家列表：\n1. D50「调制策略专家」：研究常见PWM调制方法。\n2. D51「电机控制顾问」：结合电机驱动需求。\n3. D52「仿真性能导师」：比较不同PWM方法性能。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，总结三相电机常见PWM调制方法\", \"agent_name\": \"调制策略专家\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n我需要一个关于三相PWM整流器在电能质量改善中的作用研究方案。\n\n可用专家列表：\n1. R453「电能质量研究员」：研究PWM整流器在电能质量改善中的作用。\n2. R454「控制工程师」：提出控制方法。\n3. R455「实验验证员」：测试改善效果。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，研究PWM整流器在电能质量改善中的作用\", \"agent_name\": \"电能质量研究员\"}, {\"step_name\": \"任务2，提出并验证控制方法\", \"agent_name\": \"控制工程师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请给我写一个关于电机矢量控制（FOC）的教学实验大纲。\n\n可用专家列表：\n1. M40「电机控制专家」：专注于FOC控制。\n2. M41「实验课程顾问」：整理教学实验环节。\n3. M42「仿真验证导师」：在实验前进行仿真支持。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，整理FOC教学实验大纲\", \"agent_name\": \"实验课程顾问\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n需要一个关于多电平逆变器在高压直流输电中的应用研究提纲。\n\n可用专家列表：\n1. N233「HVDC研究员」：研究多电平在HVDC中的应用。\n2. N234「拓扑分析师」：提出多电平拓扑结构。\n3. N235「性能测试员」：验证高压运行效果。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，整理多电平逆变器HVDC应用研究提纲\", \"agent_name\": \"HVDC研究员\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请写一个关于Flyback电源高压尖峰的实验课程说明。\n\n可用专家列表：\n1. F470「实验讲师」：编写高压尖峰实验课程。\n2. F471「电路设计师」：提出抑制尖峰的电路方法。\n3. F472「仿真导师」：模拟高压尖峰过程。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，撰写Flyback高压尖峰实验课程说明\", \"agent_name\": \"实验讲师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n需要一个关于双有源桥在新能源储能系统中的效率优化研究报告。\n\n可用专家列表：\n1. D490「储能研究员」：研究DAB在储能中的效率问题。\n2. D491「效率优化师」：提出优化方法。\n3. D492「实验验证员」：测试优化策略。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，研究DAB在储能系统中的效率问题\", \"agent_name\": \"储能研究员\"}, {\"step_name\": \"任务2，提出并测试优化方法\", \"agent_name\": \"效率优化师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n需要确认碳化硅MOSFET在高频下的开关损耗特性。\n\n可用专家列表：\n1. W01「材料器件顾问」：负责新型功率半导体器件特性分析。\n2. W02「仿真求解导师」：建立器件模型并进行损耗仿真。\n3. W03「热管理顾问」：关注器件温度特性和散热设计。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，分析SiC MOSFET高频损耗\", \"agent_name\": \"材料器件顾问\"}, {\"step_name\": \"任务2，执行仿真验证\", \"agent_name\": \"仿真求解导师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n需要写一个关于多电平逆变器常见结构的比较提纲。\n\n可用专家列表：\n1. N90「多电平拓扑顾问」：研究三电平、五电平等结构。\n2. N91「优缺点评估师」：比较不同拓扑优缺点。\n3. N92「仿真性能导师」：验证多电平性能。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，整理多电平逆变器结构比较提纲\", \"agent_name\": \"优缺点评估师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n我想研究GaN器件在高频DC-DC中的EMI特性。\n\n可用专家列表：\n1. G160「宽禁带顾问」：研究GaN器件特性。\n2. G161「电磁兼容专家」：分析高频EMI问题。\n3. G162「仿真性能导师」：验证EMI特性。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，研究GaN器件在高频DC-DC中的EMI特性\", \"agent_name\": \"电磁兼容专家\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n我想要一个关于电机FOC控制的实验教学提纲。\n\n可用专家列表：\n1. M70「电机控制专家」：研究FOC控制。\n2. M71「实验课程顾问」：整理教学实验内容。\n3. M72「仿真性能导师」：进行仿真支持。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，整理FOC实验教学提纲\", \"agent_name\": \"实验课程顾问\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请写一个关于Buck电路控制环路补偿的实验提纲。\n\n可用专家列表：\n1. B130「补偿设计师」：研究环路补偿方法。\n2. B131「实验课程顾问」：编写补偿实验步骤。\n3. B132「仿真性能导师」：验证实验效果。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，整理Buck补偿实验提纲\", \"agent_name\": \"补偿设计师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请写一个关于三电平逆变器并网控制的实验大纲。\n\n可用专家列表：\n1. N450「实验讲师」：编写并网控制实验课程。\n2. N451「控制研究员」：提出并网控制方法。\n3. N452「仿真专家」：验证并网控制性能。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，撰写三电平逆变器并网控制实验大纲\", \"agent_name\": \"实验讲师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n需要一个关于双有源桥在直流微网中动态特性的研究报告。\n\n可用专家列表：\n1. D470「微网研究员」：研究DAB在直流微网中的动态行为。\n2. D471「控制工程师」：提出动态调节方法。\n3. D472「仿真导师」：验证动态运行特性。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，研究DAB在直流微网中的动态行为\", \"agent_name\": \"微网研究员\"}, {\"step_name\": \"任务2，验证动态调节方法\", \"agent_name\": \"控制工程师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请写一个关于电池SOC估算的实验课程大纲。\n\n可用专家列表：\n1. B330「实验讲师」：编写SOC实验课程内容。\n2. B331「算法研究员」：设计SOC估算算法。\n3. B332「测试员」：验证SOC算法结果。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，撰写SOC实验课程大纲\", \"agent_name\": \"实验讲师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n帮我分析一下Boost电路在突加负载时的动态响应。\n\n可用专家列表：\n1. U01「动态建模顾问」：负责突加负载下的动态方程推导。\n2. U02「仿真回路导师」：在负载变化条件下进行仿真分析。\n3. U03「电容电感选型师」：建议合适的储能元件，缓解动态冲击。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，分析Boost电路动态响应\", \"agent_name\": \"动态建模顾问\"}, {\"step_name\": \"任务2，执行仿真验证\", \"agent_name\": \"仿真回路导师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请为风力发电机组设计一个背靠背变换器的控制逻辑。\n\n可用专家列表：\n1. F10「新能源系统顾问」：负责风电发电机及其并网拓扑设计。\n2. F11「双PWM控制专家」：设计背靠背变换器的控制逻辑。\n3. F12「仿真模型导师」：负责风电机组建模和仿真。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，设计背靠背变换器控制逻辑\", \"agent_name\": \"双PWM控制专家\"}, {\"step_name\": \"任务2，进行仿真验证\", \"agent_name\": \"仿真模型导师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n我想做一个基于SVPWM的异步电机矢量控制方案。\n\n可用专家列表：\n1. V01「电机控制专家」：负责电机矢量控制与调制策略。\n2. V02「SVPWM顾问」：专门处理空间矢量PWM算法设计。\n3. V03「仿真验证师」：对电机系统运行进行仿真与结果分析。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，设计矢量控制方案\", \"agent_name\": \"电机控制专家\"}, {\"step_name\": \"任务2，规划SVPWM实现\", \"agent_name\": \"SVPWM顾问\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请写一个关于GaN器件在高频电源中的驱动设计说明。\n\n可用专家列表：\n1. G220「驱动研究员」：研究GaN器件的驱动需求。\n2. G221「电源架构师」：结合高频电源提出驱动方案。\n3. G222「验证工程师」：验证驱动设计效果。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，撰写GaN高频电源驱动设计说明\", \"agent_name\": \"驱动研究员\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n我需要一个关于双有源桥在高频运行模式下的研究步骤。\n\n可用专家列表：\n1. D340「拓扑研究员」：研究DAB在高频下的工作模式。\n2. D341「控制架构师」：提出高频运行策略。\n3. D342「仿真工程师」：验证高频运行仿真。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，分析DAB高频工作模式\", \"agent_name\": \"拓扑研究员\"}, {\"step_name\": \"任务2，验证DAB高频运行策略\", \"agent_name\": \"仿真工程师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请写一个关于Buck电路小信号建模的教学提纲。\n\n可用专家列表：\n1. B80「小信号建模师」：负责电力电子小信号建模。\n2. B81「控制策略顾问」：结合小信号模型设计控制器。\n3. B82「仿真性能导师」：验证小信号模型正确性。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，整理Buck电路小信号建模提纲\", \"agent_name\": \"小信号建模师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n需要一个关于电力电子模块热设计的总结文档。\n\n可用专家列表：\n1. T60「散热设计顾问」：研究功率模块散热方案。\n2. T61「热建模专家」：建立热阻与温升模型。\n3. T62「实验验证师」：进行热性能实验。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，总结电力电子模块热设计要点\", \"agent_name\": \"散热设计顾问\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n我想设计一个五电平T型逆变器，并研究其调制策略。\n\n可用专家列表：\n1. N10「多电平拓扑顾问」：研究T型五电平逆变器的结构。\n2. N11「调制策略专家」：设计适合的调制方法，如SPWM或SVPWM。\n3. N12「仿真模型导师」：在仿真中测试调制策略的效果。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，设计T型五电平拓扑\", \"agent_name\": \"多电平拓扑顾问\"}, {\"step_name\": \"任务2，研究调制策略\", \"agent_name\": \"调制策略专家\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n请写一个关于多电平逆变器谐波抑制的研究方案。\n\n可用专家列表：\n1. N70「多电平拓扑顾问」：研究多电平逆变器结构。\n2. N71「谐波抑制专家」：提出谐波减小方法。\n3. N72「仿真性能导师」：验证谐波抑制效果。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，研究多电平逆变器谐波抑制方案\", \"agent_name\": \"谐波抑制专家\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n我想了解这个模块如何接入现有系统。\n\n可用专家列表：\n1. L02「咨询诊断师」：专门覆盖系统接入、方案咨询与问题诊断。\n2. L05「AiPower内置专家」：当用户提到AiPower内置专家时，负责补充风险提示与策略建议。\n3. L09「硬件落地艺匠」：在模块需要具体硬件集成或改造时介入处理。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，说明模块接入流程\", \"agent_name\": \"咨询诊断师\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n我想写一个关于电动车驱动电机矢量控制的研究提纲。\n\n可用专家列表：\n1. M93「电机控制顾问」：研究电机FOC、DTC方法。\n2. M94「控制策略专家」：设计矢量控制逻辑。\n3. M95「仿真性能导师」：验证控制策略效果。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，撰写电机矢量控制研究提纲\", \"agent_name\": \"电机控制顾问\"}]"
+  },
+  {
+    "prompt": "<|im_start|>system\n你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。<|im_end|>\n<|im_start|>user\n需要一个关于LLC谐振变换器在高频条件下运行特性的研究方案。\n\n可用专家列表：\n1. L430「拓扑研究员」：研究LLC在高频下的运行特性。\n2. L431「控制研究员」：提出高频控制方法。\n3. L432「仿真专家」：验证高频下的运行性能。\n\n请根据这些专家规划执行步骤，并仅输出 JSON 数组，每个元素包含 step_name 与 agent_name 字段，不要添加额外说明。<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "response": "[{\"step_name\": \"任务1，研究LLC高频运行特性\", \"agent_name\": \"拓扑研究员\"}, {\"step_name\": \"任务2，提出并验证高频控制方法\", \"agent_name\": \"控制研究员\"}]"
+  }
+]

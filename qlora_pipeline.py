@@ -31,27 +31,51 @@ except ImportError as exc:  # pragma: no cover - guidance for missing deps
     ) from exc
 
 
-DEFAULT_TEMPLATE = """{system}### 指令:\n{prompt}\n\n### 回答:\n"""
-DEFAULT_SYSTEM = """你是一名严谨的电力电子专家，请给出准确、结构化的回答。\n\n"""
+DEFAULT_SYSTEM = """你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。"""
 
 
 @dataclass
 class Prompter:
+    tokenizer: AutoTokenizer
     system_prompt: str
-    template: str = DEFAULT_TEMPLATE
+    use_chat_template: bool = True
+    enable_thinking: bool = False
 
     def build_input(self, prompt: str) -> str:
+        if self.use_chat_template:
+            messages = []
+            if self.system_prompt:
+                messages.append({"role": "system", "content": self.system_prompt})
+            messages.append({"role": "user", "content": prompt})
+            return self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=self.enable_thinking,
+            )
         sys_part = self.system_prompt.strip()
-        if sys_part:
-            if not sys_part.endswith("\n\n"):
-                sys_part = sys_part + "\n\n"
-        else:
-            sys_part = ""
-        return self.template.format(system=sys_part, prompt=prompt.strip())
+        if sys_part and not sys_part.endswith("\n\n"):
+            sys_part += "\n\n"
+        return f"{sys_part}{prompt.strip()}\n\n"
 
     def build_supervised_text(self, prompt: str, response: str) -> str:
-        base = self.build_input(prompt)
-        return base + response.strip()
+        if self.use_chat_template:
+            messages = []
+            if self.system_prompt:
+                messages.append({"role": "system", "content": self.system_prompt})
+            messages.append({"role": "user", "content": prompt})
+            messages.append({"role": "assistant", "content": response})
+            text = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False,
+                enable_thinking=self.enable_thinking,
+            )
+            eos_token = getattr(self.tokenizer, "eos_token", None)
+            if eos_token and not text.endswith(eos_token):
+                text = text + eos_token
+            return text
+        return self.build_input(prompt) + response.strip()
 
 
 def load_sft_datasets(data_dir: Path) -> DatasetDict:
@@ -76,8 +100,22 @@ def prepare_supervised_dataset(
     keep_columns = keep_columns or []
 
     def _format(example: Dict[str, str]) -> Dict[str, str]:
-        text = prompter.build_supervised_text(example["prompt"], example["response"])
-        if add_eos and tokenizer.eos_token:
+        prompt_val = example.get("prompt", "")
+        response_val = example.get("response", "")
+
+        if prompter.use_chat_template and isinstance(prompt_val, str) and "<|im_start|>" in prompt_val:
+            text = prompt_val
+            if not text.endswith("\n"):
+                text += "\n"
+            text += response_val.rstrip()
+            if not text.endswith("\n"):
+                text += "\n"
+            if "<|im_end|>" not in text.split(response_val.rstrip())[-1]:
+                text += "<|im_end|>\n"
+        else:
+            text = prompter.build_supervised_text(prompt_val, response_val)
+
+        if add_eos and tokenizer.eos_token and not text.endswith(tokenizer.eos_token):
             text = text + tokenizer.eos_token
         result = {"text": text}
         for col in keep_columns:
@@ -121,12 +159,18 @@ def train(args: argparse.Namespace) -> None:
         args.trust_remote_code,
         force_left_padding=args.left_padding,
     )
-    prompter = Prompter(system_prompt=args.system_prompt or DEFAULT_SYSTEM, template=args.prompt_template)
+    prompter = Prompter(
+        tokenizer=tokenizer,
+        system_prompt=args.system_prompt or DEFAULT_SYSTEM,
+        use_chat_template=not args.disable_chat_template,
+        enable_thinking=args.enable_thinking,
+    )
 
-    train_dataset = prepare_supervised_dataset(datasets_dict["train"], tokenizer, prompter)
+    add_eos = not prompter.use_chat_template
+    train_dataset = prepare_supervised_dataset(datasets_dict["train"], tokenizer, prompter, add_eos=add_eos)
     eval_dataset = None
     if "val" in datasets_dict:
-        eval_dataset = prepare_supervised_dataset(datasets_dict["val"], tokenizer, prompter)
+        eval_dataset = prepare_supervised_dataset(datasets_dict["val"], tokenizer, prompter, add_eos=add_eos)
 
     quant_config = get_quantization_config(use_4bit=not args.no_quant)
     model = AutoModelForCausalLM.from_pretrained(
@@ -212,10 +256,18 @@ def train(args: argparse.Namespace) -> None:
 
 
 def extract_answer(full_text: str) -> str:
-    marker = "### 回答:"
-    if marker in full_text:
-        return full_text.split(marker, 1)[-1].strip()
-    return full_text.strip()
+    text = full_text.strip()
+    if "<|im_start|>assistant" in text:
+        text = text.split("<|im_start|>assistant", 1)[-1]
+    if "<|im_end|>" in text:
+        text = text.split("<|im_end|>", 1)[0]
+    if "</think>" in text:
+        after_think = text.split("</think>", 1)[-1]
+        text = after_think
+    if "<think>" in text and "</think>" not in text:
+        # remove dangling think block
+        text = text.split("<think>", 1)[0]
+    return text.strip()
 
 
 def resolve_inference_device(model) -> torch.device:
@@ -243,6 +295,7 @@ def generate_predictions(
     top_p: float,
     top_k: Optional[int],
     do_sample: bool,
+    presence_penalty: Optional[float],
     batch_size: int,
     device: torch.device,
     input_max_length: int,
@@ -261,8 +314,13 @@ def generate_predictions(
             batch = list(raw_batch)
         if not batch:
             continue
-
-        prompts = [prompter.build_input(item["prompt"]) for item in batch]
+        prompts = []
+        for item in batch:
+            prompt_text = item.get("prompt") or item.get("user_request") or ""
+            if isinstance(prompt_text, str) and "<|im_start|>" in prompt_text:
+                prompts.append(prompt_text)
+            else:
+                prompts.append(prompter.build_input(prompt_text))
         inputs = tokenizer(
             prompts,
             return_tensors="pt",
@@ -271,17 +329,20 @@ def generate_predictions(
             max_length=input_max_length,
         )
         inputs = {k: v.to(device) for k, v in inputs.items()}
+        gen_kwargs = dict(
+            max_new_tokens=max_new_tokens,
+            do_sample=do_sample,
+            temperature=temperature,
+            top_p=top_p,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+        if top_k is not None:
+            gen_kwargs["top_k"] = top_k
+        if presence_penalty is not None and presence_penalty != 0.0:
+            gen_kwargs["repetition_penalty"] = 1.0 + presence_penalty
         with torch.no_grad():
-            generation = model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.pad_token_id,
-            )
+            generation = model.generate(**inputs, **gen_kwargs)
         for idx, output_ids in enumerate(generation):
             prompt_len = int(inputs["attention_mask"][idx].sum().item())
             generated_ids = output_ids[prompt_len:]
@@ -307,12 +368,8 @@ def evaluate(args: argparse.Namespace) -> None:
     if test_dataset is None:
         raise FileNotFoundError("Expected test.jsonl for evaluation")
 
-    tokenizer = AutoTokenizer.from_pretrained(adapter_dir if adapter_dir.exists() else args.model_name, trust_remote_code=args.trust_remote_code)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "left" if not args.right_padding else "right"
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer_source = adapter_dir if adapter_dir.exists() else Path(args.model_name)
+    tokenizer = prepare_tokenizer(str(tokenizer_source), args.trust_remote_code, force_left_padding=not args.right_padding)
 
     quant_config = get_quantization_config(use_4bit=not args.no_quant)
     base_model = AutoModelForCausalLM.from_pretrained(
@@ -329,7 +386,12 @@ def evaluate(args: argparse.Namespace) -> None:
 
     device = resolve_inference_device(model)
 
-    prompter = Prompter(system_prompt=args.system_prompt or DEFAULT_SYSTEM, template=args.prompt_template)
+    prompter = Prompter(
+        tokenizer=tokenizer,
+        system_prompt=args.system_prompt or DEFAULT_SYSTEM,
+        use_chat_template=not args.disable_chat_template,
+        enable_thinking=args.enable_thinking,
+    )
     generations = generate_predictions(
         model=model,
         tokenizer=tokenizer,
@@ -339,7 +401,8 @@ def evaluate(args: argparse.Namespace) -> None:
         temperature=args.temperature,
         top_p=args.top_p,
         top_k=args.top_k,
-        do_sample=args.do_sample,
+        do_sample=not args.no_sample,
+        presence_penalty=args.presence_penalty,
         batch_size=args.batch_size,
         device=device,
         input_max_length=args.input_max_length,
@@ -347,6 +410,17 @@ def evaluate(args: argparse.Namespace) -> None:
 
     predictions = [item["prediction"] for item in generations]
     references = [item["reference"] for item in generations]
+
+    if not predictions or not references:
+        print(json.dumps({
+            "rouge": {},
+            "bleu": None,
+            "avg_pred_chars": 0,
+            "avg_ref_chars": 0,
+            "count": 0,
+            "note": "No generations available for evaluation"
+        }, ensure_ascii=False, indent=2))
+        return
 
     rouge = hf_evaluate.load("rouge")
     rouge_scores = rouge.compute(predictions=predictions, references=references, use_stemmer=True)
@@ -382,17 +456,18 @@ def build_parser() -> argparse.ArgumentParser:
     train_p.add_argument("--output-dir", default="artifacts/qlora", help="Directory for LoRA adapter outputs")
     train_p.add_argument("--data-dir", default="data/sft", help="Directory containing train/val/test jsonl")
     train_p.add_argument("--system-prompt", help="Optional system prompt override")
-    train_p.add_argument("--prompt-template", default=DEFAULT_TEMPLATE, help="Prompt template (must contain {system} and {prompt})")
     train_p.add_argument("--trust-remote-code", action="store_true", help="Enable trust_remote_code for custom models")
     train_p.add_argument("--no-quant", action="store_true", help="Disable 4-bit quantized loading")
     train_p.add_argument("--left-padding", action="store_true", help="Use left padding during training inputs")
+    train_p.add_argument("--disable-chat-template", action="store_true", help="Disable tokenizer chat template when formatting prompts")
+    train_p.add_argument("--enable-thinking", action="store_true", help="Enable thinking mode (default off for this task)")
     train_p.add_argument("--per-device-train-batch-size", type=int, default=2)
     train_p.add_argument("--per-device-eval-batch-size", type=int, default=2)
     train_p.add_argument("--gradient-accumulation-steps", type=int, default=8)
     train_p.add_argument("--learning-rate", type=float, default=2e-4)
     train_p.add_argument("--weight-decay", type=float, default=0.0)
     train_p.add_argument("--num-train-epochs", type=float, default=6.0)
-    train_p.add_argument("--max-seq-length", type=int, default=1024)
+    train_p.add_argument("--max-seq-length", type=int, default=4096)
     train_p.add_argument("--optimizer", default="paged_adamw_32bit")
     train_p.add_argument("--lr-scheduler", default="linear")
     train_p.add_argument("--warmup-ratio", type=float, default=0.05)
@@ -433,18 +508,20 @@ def build_parser() -> argparse.ArgumentParser:
     eval_p.add_argument("--adapter-dir", default="artifacts/qlora", help="Directory where LoRA adapter is stored")
     eval_p.add_argument("--data-dir", default="data/sft", help="Directory with test split jsonl")
     eval_p.add_argument("--system-prompt", help="Optional system prompt override")
-    eval_p.add_argument("--prompt-template", default=DEFAULT_TEMPLATE, help="Prompt template used during training")
     eval_p.add_argument("--trust-remote-code", action="store_true")
     eval_p.add_argument("--no-quant", action="store_true")
     eval_p.add_argument("--right-padding", action="store_true", help="Use right padding during generation (default left)")
-    eval_p.add_argument("--max-new-tokens", type=int, default=512)
-    eval_p.add_argument("--temperature", type=float, default=0.0)
-    eval_p.add_argument("--top-p", type=float, default=0.9)
-    eval_p.add_argument("--top-k", type=int)
-    eval_p.add_argument("--do-sample", action="store_true")
+    eval_p.add_argument("--disable-chat-template", action="store_true")
+    eval_p.add_argument("--enable-thinking", action="store_true")
+    eval_p.add_argument("--max-new-tokens", type=int, default=2048)
+    eval_p.add_argument("--temperature", type=float, default=0.7)
+    eval_p.add_argument("--top-p", type=float, default=0.8)
+    eval_p.add_argument("--top-k", type=int, default=20)
+    eval_p.add_argument("--no-sample", action="store_true", help="Disable sampling (defaults to Qwen recommended sampling)")
     eval_p.add_argument("--batch-size", type=int, default=2)
     eval_p.add_argument("--input-max-length", type=int, default=1024)
     eval_p.add_argument("--save-generations", help="Optional path to save prediction/reference pairs as JSONL")
+    eval_p.add_argument("--presence-penalty", type=float, default=0.0)
     eval_p.set_defaults(func=evaluate)
 
     return parser
