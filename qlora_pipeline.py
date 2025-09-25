@@ -19,6 +19,7 @@ import torch
 from datasets import Dataset, DatasetDict, load_dataset
 from peft import LoraConfig, PeftModel, PeftModelForCausalLM
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers.trainer_utils import get_last_checkpoint
 from trl import SFTConfig, SFTTrainer
 
 
@@ -29,6 +30,11 @@ except ImportError as exc:  # pragma: no cover - guidance for missing deps
     raise SystemExit(
         "Missing evaluation dependencies. Run `uv add evaluate sacrebleu rouge-score`."
     ) from exc
+
+try:  # optional progress bars for evaluation
+    from tqdm.auto import tqdm
+except ImportError:  # pragma: no cover - tqdm is optional
+    tqdm = None
 
 
 DEFAULT_SYSTEM = """你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。"""
@@ -126,14 +132,19 @@ def prepare_supervised_dataset(
     return dataset.map(_format, remove_columns=[col for col in dataset.column_names if col not in keep_columns])
 
 
-def get_quantization_config(use_4bit: bool, bnb_nf4: bool = True) -> Optional[BitsAndBytesConfig]:
+def get_quantization_config(
+    use_4bit: bool,
+    *,
+    compute_dtype: torch.dtype = torch.float16,
+    bnb_nf4: bool = True,
+) -> Optional[BitsAndBytesConfig]:
     if not use_4bit:
         return None
     return BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4" if bnb_nf4 else "fp4",
-        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_compute_dtype=compute_dtype,
     )
 
 
@@ -172,7 +183,33 @@ def train(args: argparse.Namespace) -> None:
     if "val" in datasets_dict:
         eval_dataset = prepare_supervised_dataset(datasets_dict["val"], tokenizer, prompter, add_eos=add_eos)
 
-    quant_config = get_quantization_config(use_4bit=not args.no_quant)
+    bf16_capable = False
+    if torch.cuda.is_available():
+        checker = getattr(torch.cuda, "is_bf16_supported", None)
+        if callable(checker):
+            bf16_capable = bool(checker())
+        else:  # fallback based on compute capability (Ampere+)
+            major, _ = torch.cuda.get_device_capability()
+            bf16_capable = major >= 8
+
+    if args.bf16 and not bf16_capable:
+        print("[QLoRA] Requested bf16 but GPU/driver does not support it; falling back to fp16")
+
+    bf16_on = args.bf16 and bf16_capable
+    fp16_on = args.fp16 and torch.cuda.is_available() and not bf16_on
+
+    bnb_compute_dtype = torch.bfloat16 if bf16_on else torch.float16
+    quant_config = get_quantization_config(
+        use_4bit=not args.no_quant,
+        compute_dtype=bnb_compute_dtype,
+    )
+    if quant_config is None:
+        print("[QLoRA] Loading base model in full precision (4bit disabled)")
+    else:
+        print(
+            "[QLoRA] Loading base model with 4bit quantization",
+            f"(compute dtype={quant_config.bnb_4bit_compute_dtype})",
+        )
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         quantization_config=quant_config,
@@ -189,6 +226,17 @@ def train(args: argparse.Namespace) -> None:
         task_type="CAUSAL_LM",
     )
 
+    save_strategy = args.save_strategy
+    eval_strategy = args.eval_strategy if eval_dataset is not None else "no"
+
+    if args.load_best_model_at_end and eval_dataset is not None and eval_strategy != "no":
+        if save_strategy != eval_strategy:
+            print(
+                "[QLoRA] Aligning eval_strategy to save_strategy for load_best_model_at_end",
+                f"({eval_strategy} -> {save_strategy})",
+            )
+            eval_strategy = save_strategy
+
     sft_kwargs = {
         "output_dir": str(output_dir),
         "do_train": True,
@@ -199,14 +247,14 @@ def train(args: argparse.Namespace) -> None:
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
         "num_train_epochs": args.num_train_epochs,
         "weight_decay": args.weight_decay,
-        "eval_strategy": args.eval_strategy if eval_dataset is not None else "no",
-        "save_strategy": args.save_strategy,
+        "eval_strategy": eval_strategy,
+        "save_strategy": save_strategy,
         "logging_steps": args.logging_steps,
         "lr_scheduler_type": args.lr_scheduler,
         "warmup_ratio": args.warmup_ratio,
         "optim": args.optimizer,
-        "bf16": args.bf16 and torch.cuda.is_available(),
-        "fp16": args.fp16 and torch.cuda.is_available(),
+        "bf16": bf16_on,
+        "fp16": fp16_on,
         "gradient_checkpointing": args.gradient_checkpointing,
         "report_to": args.report_to,
         "save_total_limit": args.save_total_limit,
@@ -218,11 +266,17 @@ def train(args: argparse.Namespace) -> None:
     if args.gradient_checkpointing:
         sft_kwargs["gradient_checkpointing_kwargs"] = {"use_reentrant": args.gc_use_reentrant}
 
-    if args.save_strategy == "steps":
-        sft_kwargs["save_steps"] = args.save_steps
+    save_steps = args.save_steps
+    eval_steps = args.eval_steps if eval_dataset is not None else None
 
-    if eval_dataset is not None and args.eval_strategy == "steps":
-        sft_kwargs["eval_steps"] = args.eval_steps
+    if save_strategy == "steps":
+        if eval_steps is not None and eval_strategy == "steps":
+            if save_steps % eval_steps != 0:
+                save_steps = ((save_steps // eval_steps) + 1) * eval_steps
+        sft_kwargs["save_steps"] = save_steps
+
+    if eval_steps is not None and eval_strategy == "steps":
+        sft_kwargs["eval_steps"] = eval_steps
 
     if eval_dataset is not None and args.load_best_model_at_end:
         sft_kwargs["load_best_model_at_end"] = True
@@ -242,7 +296,53 @@ def train(args: argparse.Namespace) -> None:
         peft_config=lora_config,
     )
 
-    trainer.train()
+    resume_arg = getattr(args, "resume_from_checkpoint", None)
+    if resume_arg:
+        resume_candidate = Path(resume_arg)
+        resolved_checkpoint: Optional[str] = None
+
+        if resume_candidate.is_dir():
+            if (resume_candidate / "trainer_state.json").exists():
+                resolved_checkpoint = str(resume_candidate)
+            else:
+                last_ckpt = get_last_checkpoint(str(resume_candidate))
+                if last_ckpt:
+                    resolved_checkpoint = last_ckpt
+        elif resume_candidate.exists() and resume_candidate.is_file():
+            if resume_candidate.suffix in {".json", ""}:
+                try:
+                    data = resume_candidate.read_text(encoding="utf-8").strip()
+                    if data.startswith("{"):
+                        checkpoint_name = json.loads(data).get("last_checkpoint")
+                    else:
+                        checkpoint_name = data
+                    if checkpoint_name:
+                        candidate_dir = resume_candidate.parent / checkpoint_name
+                        if candidate_dir.is_dir():
+                            resolved_checkpoint = str(candidate_dir)
+                except Exception as exc:  # pragma: no cover - defensive
+                    print(f"[QLoRA] Failed to parse {resume_candidate}: {exc}")
+            # fall through to searching parent if file could not be resolved
+        if resolved_checkpoint is None:
+            search_root = resume_candidate.parent if resume_candidate.parent.exists() else Path.cwd()
+            last_ckpt = get_last_checkpoint(str(search_root))
+            if last_ckpt:
+                resolved_checkpoint = last_ckpt
+
+        if resolved_checkpoint is None:
+            fallback_ckpt = get_last_checkpoint(str(output_dir))
+            if fallback_ckpt:
+                resolved_checkpoint = fallback_ckpt
+
+        if resolved_checkpoint is None:
+            raise FileNotFoundError(
+                f"Unable to locate checkpoint for resume path '{resume_arg}'. "
+                "Provide a checkpoint directory such as '.../checkpoint-125'."
+            )
+        print(f"[QLoRA] Resuming from checkpoint: {resolved_checkpoint}")
+        trainer.train(resume_from_checkpoint=resolved_checkpoint)
+    else:
+        trainer.train()
 
     trainer.model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
@@ -299,10 +399,16 @@ def generate_predictions(
     batch_size: int,
     device: torch.device,
     input_max_length: int,
+    *,
+    show_progress: bool = False,
 ) -> List[Dict[str, str]]:
     results: List[Dict[str, str]] = []
     model.eval()
-    for start in range(0, len(dataset), batch_size):
+    progress_bar = None
+    indices = range(0, len(dataset), batch_size)
+    if show_progress and tqdm is not None:
+        progress_bar = tqdm(total=len(dataset), desc="Evaluating", leave=False)
+    for start in indices:
         raw_batch = dataset[start : start + batch_size]
         if isinstance(raw_batch, dict):
             batch_size_eff = len(next(iter(raw_batch.values()))) if raw_batch else 0
@@ -357,6 +463,10 @@ def generate_predictions(
                     "reference": example.get("response", ""),
                 }
             )
+        if progress_bar is not None:
+            progress_bar.update(len(batch))
+    if progress_bar is not None:
+        progress_bar.close()
     return results
 
 
@@ -372,6 +482,13 @@ def evaluate(args: argparse.Namespace) -> None:
     tokenizer = prepare_tokenizer(str(tokenizer_source), args.trust_remote_code, force_left_padding=not args.right_padding)
 
     quant_config = get_quantization_config(use_4bit=not args.no_quant)
+    if quant_config is None:
+        print("[Eval] Loading base model in full precision (4bit disabled)")
+    else:
+        print(
+            "[Eval] Loading base model with 4bit quantization",
+            f"(compute dtype={quant_config.bnb_4bit_compute_dtype})",
+        )
     base_model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         quantization_config=quant_config,
@@ -406,6 +523,7 @@ def evaluate(args: argparse.Namespace) -> None:
         batch_size=args.batch_size,
         device=device,
         input_max_length=args.input_max_length,
+        show_progress=True,
     )
 
     predictions = [item["prediction"] for item in generations]
@@ -497,6 +615,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use reentrant checkpointing (default False for Torch>=2.5 recommendation)",
     )
+    train_p.add_argument("--resume-from-checkpoint", type=str, help="Path to checkpoint to resume training from")
     train_p.add_argument("--bf16", action="store_true")
     train_p.add_argument("--fp16", action="store_true")
     train_p.add_argument("--report-to", nargs="+", help="Optional trackers e.g. wandb")
