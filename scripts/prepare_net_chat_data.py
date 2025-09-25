@@ -8,8 +8,8 @@ from pathlib import Path
 from transformers import AutoTokenizer
 
 DEFAULT_SYSTEM = (
-    "You are a circuit topology planner. Given a raw netlist, identify hierarchical modules "
-    "and output a JSON object containing the `modules` array and `replaced_netlist`."
+    "你是一名电路拓扑规划师。给定原始网表后，需要识别其中的层级模块，"
+    "并仅输出包含 `modules` 数组和 `replaced_netlist` 字段的 JSON 对象。"
 )
 
 
