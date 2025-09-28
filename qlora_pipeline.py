@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -38,6 +39,17 @@ except ImportError:  # pragma: no cover - tqdm is optional
 
 
 DEFAULT_SYSTEM = """你是一个任务编排者，你需要根据用户的指令以及可用的专家列表，规划出求解步骤，选出每步合适的专家，并且仅输出json数组。"""
+
+
+def resolve_system_prompt(explicit_prompt: Optional[str], data_dir: Path) -> str:
+    if explicit_prompt:
+        return explicit_prompt
+    prompt_file = data_dir / "system_prompt.txt"
+    if prompt_file.exists():
+        text = prompt_file.read_text(encoding="utf-8").strip()
+        if text:
+            return text
+    return DEFAULT_SYSTEM
 
 
 @dataclass
@@ -172,13 +184,21 @@ def train(args: argparse.Namespace) -> None:
     )
     prompter = Prompter(
         tokenizer=tokenizer,
-        system_prompt=args.system_prompt or DEFAULT_SYSTEM,
+        system_prompt=resolve_system_prompt(args.system_prompt, data_dir),
         use_chat_template=not args.disable_chat_template,
         enable_thinking=args.enable_thinking,
     )
 
     add_eos = not prompter.use_chat_template
     train_dataset = prepare_supervised_dataset(datasets_dict["train"], tokenizer, prompter, add_eos=add_eos)
+    try:
+        preview = train_dataset[0]
+    except IndexError:
+        preview = None
+    if preview is not None:
+        sample_text = preview.get("text") if isinstance(preview, dict) else preview
+        print("[QLoRA] 首条训练样本: ")
+        print(sample_text)
     eval_dataset = None
     if "val" in datasets_dict:
         eval_dataset = prepare_supervised_dataset(datasets_dict["val"], tokenizer, prompter, add_eos=add_eos)
@@ -505,7 +525,7 @@ def evaluate(args: argparse.Namespace) -> None:
 
     prompter = Prompter(
         tokenizer=tokenizer,
-        system_prompt=args.system_prompt or DEFAULT_SYSTEM,
+        system_prompt=resolve_system_prompt(args.system_prompt, data_dir),
         use_chat_template=not args.disable_chat_template,
         enable_thinking=args.enable_thinking,
     )
