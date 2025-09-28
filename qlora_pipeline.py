@@ -20,6 +20,7 @@ import torch
 from datasets import Dataset, DatasetDict, load_dataset
 from peft import LoraConfig, PeftModel, PeftModelForCausalLM
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers.trainer_callback import EarlyStoppingCallback
 from transformers.trainer_utils import get_last_checkpoint
 from trl import SFTConfig, SFTTrainer
 
@@ -89,9 +90,14 @@ class Prompter:
                 add_generation_prompt=False,
                 enable_thinking=self.enable_thinking,
             )
+            if not self.enable_thinking:
+                # 删除模板可能插入的空思考片段，避免多余的 <think> 标签
+                text = text.replace("<think>\n\n</think>\n\n", "").replace("<think></think>", "")
             eos_token = getattr(self.tokenizer, "eos_token", None)
             if eos_token and not text.endswith(eos_token):
                 text = text + eos_token
+                # 有些模板返回值末尾已经包含一个 <|im_end|>，追加 eos 会导致重复，这里做一次去重
+                text = text.replace(f"{eos_token}\n{eos_token}", eos_token)
             return text
         return self.build_input(prompt) + response.strip()
 
@@ -315,6 +321,18 @@ def train(args: argparse.Namespace) -> None:
         processing_class=tokenizer,
         peft_config=lora_config,
     )
+
+    if (
+        args.early_stopping_patience is not None
+        and eval_dataset is not None
+        and sft_config.eval_strategy != "no"
+    ):
+        trainer.add_callback(
+            EarlyStoppingCallback(
+                early_stopping_patience=args.early_stopping_patience,
+                early_stopping_threshold=args.early_stopping_threshold,
+            )
+        )
 
     resume_arg = getattr(args, "resume_from_checkpoint", None)
     if resume_arg:
@@ -640,6 +658,17 @@ def build_parser() -> argparse.ArgumentParser:
     train_p.add_argument("--fp16", action="store_true")
     train_p.add_argument("--report-to", nargs="+", help="Optional trackers e.g. wandb")
     train_p.add_argument("--merge-lora", action="store_true", help="Merge LoRA adapter into base weights after training")
+    train_p.add_argument(
+        "--early-stopping-patience",
+        type=int,
+        help="提前停止训练所需的连续评估无改进次数 (需开启验证)",
+    )
+    train_p.add_argument(
+        "--early-stopping-threshold",
+        type=float,
+        default=0.0,
+        help="判定“有改进”时允许的小数误差阈值",
+    )
     train_p.set_defaults(func=train)
 
     eval_p = sub.add_parser("evaluate", help="Evaluate the finetuned adapter")
